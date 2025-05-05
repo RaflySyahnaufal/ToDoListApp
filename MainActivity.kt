@@ -5,18 +5,17 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.*
+import androidx.compose.material3.Checkbox
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.todolistapp.ui.theme.ToDoListAppTheme
-import kotlinx.coroutines.launch
+import androidx.compose.ui.text.style.TextDecoration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,49 +33,35 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+data class TaskItem(val taskName: String, val assigneeName: String, val isDone: Boolean)
+
 @Composable
 fun ToDoApp() {
-    val context = LocalContext.current
-    val dataStoreManager = remember { DataStoreManager(context) }
-
     var task by remember { mutableStateOf("") }
-    var taskList by remember { mutableStateOf(listOf<Pair<String, Boolean>>()) }
-
-    val coroutineScope = rememberCoroutineScope()
-
-    // Ambil data dari DataStore saat pertama kali
-    LaunchedEffect(Unit) {
-        dataStoreManager.tasksFlow.collect { data ->
-            if (data.isNotEmpty()) {
-                taskList = data.split("|").map {
-                    val (t, done) = it.split("::")
-                    t to done.toBoolean()
-                }
-            }
-        }
-    }
+    var assignee by remember { mutableStateOf("") }
+    var taskList by remember { mutableStateOf(listOf<TaskItem>()) }
 
     Column(modifier = Modifier.padding(16.dp)) {
         OutlinedTextField(
             value = task,
             onValueChange = { task = it },
-            label = { Text("Tambah Tugas") },
+            label = { Text("Nama Tugas") },
             modifier = Modifier.fillMaxWidth()
         )
-
         Spacer(modifier = Modifier.height(8.dp))
-
+        OutlinedTextField(
+            value = assignee,
+            onValueChange = { assignee = it },
+            label = { Text("Nama Pekerja") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = {
-                if (task.isNotBlank()) {
-                    val updatedList = taskList + (task to false)
-                    taskList = updatedList
+                if (task.isNotBlank() && assignee.isNotBlank()) {
+                    taskList = taskList + TaskItem(task, assignee, false)
                     task = ""
-
-                    val saveData = updatedList.joinToString("|") { "${it.first}::${it.second}" }
-                    coroutineScope.launch {
-                        dataStoreManager.saveTasks(saveData)
-                    }
+                    assignee = ""
                 }
             },
             modifier = Modifier.fillMaxWidth()
@@ -86,49 +71,61 @@ fun ToDoApp() {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Header Tabel
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text("No", modifier = Modifier.weight(1f))
+            Text("Tugas", modifier = Modifier.weight(3f))
+            Text("Pekerja", modifier = Modifier.weight(2f))
+            Spacer(modifier = Modifier.width(40.dp)) // untuk ikon hapus
+        }
+
+        Divider()
+
+        // Isi Tabel
         LazyColumn {
-            items(taskList) { (item, isDone) ->
+            itemsIndexed(taskList) { index, item ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = isDone,
-                            onCheckedChange = {
-                                val updatedList = taskList.map {
-                                    if (it.first == item) it.first to !it.second else it
-                                }
-                                taskList = updatedList
+                    Text("${index + 1}", modifier = Modifier.weight(1f))
 
-                                val saveData = updatedList.joinToString("|") { "${it.first}::${it.second}" }
-                                coroutineScope.launch {
-                                    dataStoreManager.saveTasks(saveData)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(3f)
+                    ) {
+                        Checkbox(
+                            checked = item.isDone,
+                            onCheckedChange = {
+                                taskList = taskList.mapIndexed { i, taskItem ->
+                                    if (i == index) taskItem.copy(isDone = !taskItem.isDone) else taskItem
                                 }
                             }
                         )
                         Text(
-                            text = item,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
+                            text = item.taskName,
+                            textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None
                         )
                     }
 
-                    IconButton(onClick = {
-                        val updatedList = taskList.filterNot { it.first == item }
-                        taskList = updatedList
+                    Text(
+                        text = item.assigneeName,
+                        modifier = Modifier.weight(2f)
+                    )
 
-                        val saveData = updatedList.joinToString("|") { "${it.first}::${it.second}" }
-                        coroutineScope.launch {
-                            dataStoreManager.saveTasks(saveData)
+                    IconButton(
+                        onClick = {
+                            taskList = taskList.filterIndexed { i, _ -> i != index }
                         }
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Hapus Tugas"
-                        )
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Hapus Tugas")
                     }
                 }
             }
