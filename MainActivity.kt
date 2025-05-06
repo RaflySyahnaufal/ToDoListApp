@@ -10,12 +10,13 @@ import androidx.compose.material3.*
 import androidx.compose.material3.Checkbox
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.todolistapp.ui.theme.ToDoListAppTheme
-import androidx.compose.ui.text.style.TextDecoration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,13 +34,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-data class TaskItem(val taskName: String, val assigneeName: String, val isDone: Boolean)
-
 @Composable
 fun ToDoApp() {
     var task by remember { mutableStateOf("") }
     var assignee by remember { mutableStateOf("") }
-    var taskList by remember { mutableStateOf(listOf<TaskItem>()) }
+    var taskList by remember { mutableStateOf(listOf<Triple<String, String, Boolean>>()) }
+
+    var isEditing by remember { mutableStateOf(false) }
+    var editIndex by remember { mutableStateOf(-1) }
 
     Column(modifier = Modifier.padding(16.dp)) {
         OutlinedTextField(
@@ -59,73 +61,88 @@ fun ToDoApp() {
         Button(
             onClick = {
                 if (task.isNotBlank() && assignee.isNotBlank()) {
-                    taskList = taskList + TaskItem(task, assignee, false)
+                    if (isEditing) {
+                        taskList = taskList.toMutableList().also {
+                            it[editIndex] = Triple(task, assignee, it[editIndex].third)
+                        }
+                        isEditing = false
+                        editIndex = -1
+                    } else {
+                        taskList = taskList + Triple(task, assignee, false)
+                    }
                     task = ""
                     assignee = ""
                 }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Tambah")
+            Text(if (isEditing) "Update" else "Tambah")
         }
-
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Header Tabel
+        // Header table
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("No", modifier = Modifier.weight(1f))
-            Text("Tugas", modifier = Modifier.weight(3f))
-            Text("Pekerja", modifier = Modifier.weight(2f))
-            Spacer(modifier = Modifier.width(40.dp)) // untuk ikon hapus
+            Text("No", modifier = Modifier.width(30.dp), style = MaterialTheme.typography.bodyMedium)
+            Text("Tugas", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Text("Pekerja", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.width(60.dp)) // for icons
         }
 
         Divider()
 
-        // Isi Tabel
         LazyColumn {
-            itemsIndexed(taskList) { index, item ->
+            itemsIndexed(taskList) { index, (item, worker, isDone) ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("${index + 1}", modifier = Modifier.weight(1f))
+                    Text("${index + 1}.", modifier = Modifier.width(30.dp))
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(3f)
+                        modifier = Modifier.weight(1f)
                     ) {
                         Checkbox(
-                            checked = item.isDone,
+                            checked = isDone,
                             onCheckedChange = {
-                                taskList = taskList.mapIndexed { i, taskItem ->
-                                    if (i == index) taskItem.copy(isDone = !taskItem.isDone) else taskItem
+                                taskList = taskList.toMutableList().also {
+                                    it[index] = Triple(item, worker, !isDone)
                                 }
                             }
                         )
-                        Text(
-                            text = item.taskName,
-                            textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None
-                        )
+                        Column {
+                            Text(
+                                text = item,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
+                            )
+                            Text("Oleh: $worker", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
 
-                    Text(
-                        text = item.assigneeName,
-                        modifier = Modifier.weight(2f)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            taskList = taskList.filterIndexed { i, _ -> i != index }
+                    Row(modifier = Modifier.width(60.dp)) {
+                        IconButton(onClick = {
+                            task = item
+                            assignee = worker
+                            isEditing = true
+                            editIndex = index
+                        }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit Tugas")
                         }
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Hapus Tugas")
+
+                        IconButton(onClick = {
+                            taskList = taskList.toMutableList().also { it.removeAt(index) }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Hapus Tugas")
+                        }
                     }
                 }
             }
